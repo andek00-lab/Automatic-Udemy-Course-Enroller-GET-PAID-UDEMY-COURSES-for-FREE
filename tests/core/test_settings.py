@@ -5,7 +5,30 @@ import pytest
 from ruamel.yaml import YAML
 
 from udemy_enroller import Settings
+from udemy_enroller.settings import strtobool
 from udemy_enroller.utils import get_app_dir
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("True", True),
+        ("true", True),
+        ("1", True),
+        ("yes", True),
+        ("False", False),
+        ("false", False),
+        ("0", False),
+        ("no", False),
+    ],
+)
+def test_strtobool(value, expected):
+    assert strtobool(value) is expected
+
+
+def test_strtobool_rejects_invalid_value():
+    with pytest.raises(ValueError):
+        strtobool("invalid")
 
 
 @pytest.mark.parametrize(

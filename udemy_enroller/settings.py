@@ -1,7 +1,6 @@
 """Settings."""
 import getpass
 import os.path
-from distutils.util import strtobool
 from typing import Dict, List, Tuple
 
 from ruamel.yaml import YAML, dump
@@ -10,6 +9,16 @@ from udemy_enroller.logger import get_logger
 from udemy_enroller.utils import get_app_dir
 
 logger = get_logger()
+
+
+def strtobool(value: str) -> bool:
+    """Convert a common textual truth value to bool."""
+    normalized = value.lower()
+    if normalized in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    if normalized in ("n", "no", "f", "false", "off", "0"):
+        return False
+    raise ValueError(f"invalid truth value {value!r}")
 
 
 class Settings:
