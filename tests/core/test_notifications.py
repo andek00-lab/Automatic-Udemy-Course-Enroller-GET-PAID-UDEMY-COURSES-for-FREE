@@ -1,6 +1,8 @@
 """Tests for Telegram notification mode."""
+import asyncio
 from datetime import datetime, timedelta, timezone
 import json
+from unittest import mock
 
 from udemy_enroller.notifications import (
     CourseOffer,
@@ -8,6 +10,7 @@ from udemy_enroller.notifications import (
     NotificationState,
     UdemyOfferInspector,
     is_hit,
+    notify_free_courses,
     offer_matches,
 )
 
@@ -49,6 +52,59 @@ def test_parse_coupon_link_keeps_other_query_parameters():
     assert coupon == "FREE100"
     assert "couponCode" not in clean_url
     assert "utm_source=test" in clean_url
+
+
+def test_inspector_uses_udemy_headers_and_resolves_course_id():
+    session = mock.Mock()
+    response = mock.Mock(
+        content=b'<html><body data-clp-course-id="6737247"></body></html>'
+    )
+    session.get.return_value = response
+
+    with mock.patch(
+        "udemy_enroller.notifications.requests.Session", return_value=session
+    ):
+        inspector = UdemyOfferInspector()
+
+    assert inspector._get_course_id("https://www.udemy.com/course/example/") == 6737247
+    session.headers.update.assert_called_once_with(inspector.UDEMY_HEADERS)
+    session.get.assert_called_once_with(
+        "https://www.udemy.com/course/example/", timeout=20
+    )
+    response.raise_for_status.assert_called_once_with()
+
+
+def test_missing_course_id_is_skipped_without_failing_notification_run(tmp_path):
+    class Scrapers:
+        async def run(self):
+            return ["https://www.udemy.com/course/example/?couponCode=FREE100"]
+
+    session = mock.Mock()
+    session.get.return_value = mock.Mock(content=b"<html><body></body></html>")
+    config = _config(state_file=str(tmp_path / "state.json"))
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        with (
+            mock.patch(
+                "udemy_enroller.notifications.NotificationConfig.from_env",
+                return_value=config,
+            ),
+            mock.patch(
+                "udemy_enroller.notifications.ScraperManager",
+                return_value=Scrapers(),
+            ),
+            mock.patch(
+                "udemy_enroller.notifications.requests.Session", return_value=session
+            ),
+        ):
+            notify_free_courses(True, False, False, False, False, 1, dry_run=True)
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+    session.get.return_value.raise_for_status.assert_called_once_with()
 
 
 def test_offer_filters_are_case_insensitive():

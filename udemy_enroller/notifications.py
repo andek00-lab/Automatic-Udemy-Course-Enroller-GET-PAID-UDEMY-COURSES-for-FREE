@@ -204,10 +204,18 @@ class UdemyOfferInspector:
     BASE_URL = "https://www.udemy.com"
     COURSE_DETAILS = BASE_URL + "/api-2.0/courses/{}/"
     COUPON_DETAILS = BASE_URL + "/api-2.0/course-landing-components/{}/me/"
+    UDEMY_HEADERS = {
+        "User-Agent": "okhttp/4.9.2 UdemyAndroid 8.9.2(499) (phone)",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.udemy.com/",
+        "X-Requested-With": "XMLHttpRequest",
+    }
 
     def __init__(self, timeout: int = 20):
         self.timeout = timeout
         self.session = requests.Session()
+        self.session.headers.update(self.UDEMY_HEADERS)
 
     @staticmethod
     def _parse_coupon_link(course_link: str) -> Tuple[str, str]:
