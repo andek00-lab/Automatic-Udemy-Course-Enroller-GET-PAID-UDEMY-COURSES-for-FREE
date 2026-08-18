@@ -17,9 +17,13 @@ async def http_get(url, headers=None):
     if headers is None:
         headers = {}
     try:
-        async with aiohttp.ClientSession() as session:
+        resolver = aiohttp.ThreadedResolver()
+        connector = aiohttp.TCPConnector(resolver=resolver)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, headers=headers) as response:
+                response.raise_for_status()
                 text = await response.read()
                 return text
     except Exception as e:
         logger.error(f"Error in get request: {e}")
+        return b""

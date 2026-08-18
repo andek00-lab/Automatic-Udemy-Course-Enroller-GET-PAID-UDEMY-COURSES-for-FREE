@@ -16,6 +16,9 @@ class MockResponse:
     async def json(self):
         return self._data
 
+    def raise_for_status(self):
+        pass
+
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
