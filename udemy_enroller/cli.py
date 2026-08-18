@@ -4,12 +4,12 @@ import logging
 import platform
 import sys
 from argparse import Namespace
+from importlib.metadata import PackageNotFoundError, distribution
 from typing import Tuple, Union
-
-from pkg_resources import DistributionNotFound, get_distribution
 
 from udemy_enroller import ALL_VALID_BROWSER_STRINGS, DriverManager, Settings
 from udemy_enroller.logger import get_logger
+from udemy_enroller.notifications import notify_free_courses
 from udemy_enroller.runner import redeem_courses, redeem_courses_ui
 
 logger = get_logger()
@@ -34,12 +34,11 @@ def log_package_details() -> None:
     :return: None
     """
     try:
-        distribution = get_distribution("udemy_enroller")
-        if distribution:
-            logger.debug(f"Name: {distribution.project_name}")
-            logger.debug(f"Version: {distribution.version}")
-            logger.debug(f"Location: {distribution.location}")
-    except DistributionNotFound:
+        package_distribution = distribution("udemy_enroller")
+        logger.debug(f"Name: {package_distribution.metadata['Name']}")
+        logger.debug(f"Version: {package_distribution.version}")
+        logger.debug(f"Location: {package_distribution.locate_file('')}")
+    except PackageNotFoundError:
         logger.debug("Not installed on python env.")
 
 
@@ -54,7 +53,7 @@ def log_python_version():
 
 def log_os_version():
     """
-    Log version of the OS.
+    Log version of the OS in use.
 
     :return: None
     """
@@ -80,7 +79,6 @@ def determine_if_scraper_enabled(
         and not discudemy_enabled
         and not coursevania_enabled
     ):
-        # Set all to True
         (
             idownloadcoupon_enabled,
             freebiesglobal_enabled,
@@ -108,21 +106,31 @@ def run(
     max_pages: Union[int, None],
     delete_settings: bool,
     delete_cookie: bool,
+    notify_only: bool = False,
+    notify_dry_run: bool = False,
 ):
     """
-    Run the udemy enroller script.
+    Run the Udemy enroller or Telegram notification mode.
 
-    :param str browser: Name of the browser we want to create a driver for
-    :param bool idownloadcoupon_enabled:
-    :param bool freebiesglobal_enabled:
-    :param bool tutorialbar_enabled:
-    :param bool discudemy_enabled:
-    :param bool coursevania_enabled:
-    :param int max_pages: Max pages to scrape from sites (if pagination exists)
-    :param bool delete_settings: Determines if we should delete old settings file
-    :param bool delete_cookie: Determines if we should delete the cookie file
-    :return:
+    Notification mode deliberately runs before Settings is created, so it does
+    not ask for Udemy credentials and never attempts course enrolment.
+
+    :return: None
     """
+    if notify_only or notify_dry_run:
+        if browser:
+            logger.warning("--browser is ignored in notification mode")
+        notify_free_courses(
+            idownloadcoupon_enabled,
+            freebiesglobal_enabled,
+            tutorialbar_enabled,
+            discudemy_enabled,
+            coursevania_enabled,
+            max_pages,
+            dry_run=notify_dry_run,
+        )
+        return
+
     settings = Settings(delete_settings, delete_cookie)
     if browser:
         dm = DriverManager(browser=browser, is_ci_build=settings.is_ci_build)
@@ -205,14 +213,30 @@ def parse_args() -> Namespace:
         default=False,
         help="Delete any existing settings file",
     )
-
     parser.add_argument(
         "--delete-cookie",
         action="store_true",
         default=False,
         help="Delete existing cookie file",
     )
-
+    parser.add_argument(
+        "--notify-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Find paid Udemy courses temporarily reduced to zero and send "
+            "Telegram notifications without logging into Udemy"
+        ),
+    )
+    parser.add_argument(
+        "--notify-dry-run",
+        action="store_true",
+        default=False,
+        help=(
+            "Run notification discovery and filtering without Telegram delivery "
+            "or updating notification history"
+        ),
+    )
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -254,4 +278,6 @@ def main():
             args.max_pages,
             args.delete_settings,
             args.delete_cookie,
+            args.notify_only,
+            args.notify_dry_run,
         )
